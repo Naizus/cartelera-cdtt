@@ -19,11 +19,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const carouselContent = document.getElementById("carousel-content");
     let initialLoad = true;
 
+    // --- SISTEMA ANTIFALLOS PARA TV VIEJA ---
+    // Recarga la página completa todos los días a las 3:00 AM para liberar la memoria RAM
+    function programarReinicioDiario() {
+        const ahora = new Date();
+        const reinicio = new Date();
+        reinicio.setHours(3, 0, 0, 0); // 3:00 AM
+        
+        // Si ya pasaron las 3 AM hoy, programar para mañana
+        if (ahora.getTime() > reinicio.getTime()) {
+            reinicio.setDate(reinicio.getDate() + 1);
+        }
+        
+        const tiempoFaltante = reinicio.getTime() - ahora.getTime();
+        setTimeout(() => {
+            window.location.reload(true);
+        }, tiempoFaltante);
+    }
+    programarReinicioDiario();
+    // ----------------------------------------
+
     // Escuchar cambios en la base de datos en tiempo real
     database.ref('tv_data').on('value', (snapshot) => {
         const data = snapshot.val();
         
-        // Si no es la carga inicial y hay un cambio, recargamos la web en la TV
         if (!initialLoad) {
             console.log("Nuevas ofertas detectadas. Recargando TV...");
             window.location.reload();
@@ -35,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data && data.images) {
             imagenes = data.images;
         } else {
-            imagenes = ["img/1.jpg"]; // Imagen de respaldo por si está vacío
+            imagenes = ["img/1.jpg"]; // Imagen de respaldo
         }
 
         // Crear elementos de imagen
@@ -49,7 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Iniciar el carrusel una vez cargadas las imágenes
+        // Iniciar el carrusel
         iniciarLogicaCarrusel();
     });
 
@@ -78,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (currentImageIndex === images.length - 1) {
                     clearInterval(imageInterval);
-                    setTimeout(callback, 15000);
+                    setTimeout(callback, 15000); // Mismo tiempo que tenías originalmente
                 }
             }, 10000);
         }
@@ -89,17 +108,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            // Ocultar todo lo demás
             images.forEach(img => img.classList.remove("active"));
             if(video1) video1.classList.remove("active");
             if(video2) video2.classList.remove("active");
 
+            // Mostrar el video actual
             videoElement.classList.add("active");
-            videoElement.currentTime = 0;
             
-            let playPromise = videoElement.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => console.log("Auto-play bloqueado:", error));
-            }
+            // TRUCO TV VIEJA: Darle 200 milisegundos a la TV para que procese el cambio visual antes de exigirle reproducir
+            setTimeout(() => {
+                videoElement.currentTime = 0;
+                let playPromise = videoElement.play();
+                
+                // Evitar errores si el navegador es tan viejo que no soporta Promesas
+                if (playPromise !== undefined && typeof playPromise.catch === 'function') {
+                    playPromise.catch(error => console.log("Auto-play bloqueado o error en TV vieja:", error));
+                }
+            }, 200);
 
             setTimeout(() => {
                 videoElement.pause();

@@ -16,10 +16,12 @@
     
     <div class="carousel-container">
         <div class="carousel" id="carousel-content">
-            <video class="carousel-video1" src="src/video1.mp4" muted></video>
-            <video class="carousel-video2" src="src/video2.mp4" muted></video>
+            <!-- Videos con atributos forzados para navegadores antiguos -->
+            <video class="carousel-video1" src="src/video1.mp4" muted playsinline preload="auto"></video>
+            <video class="carousel-video2" src="src/video2.mp4" muted playsinline preload="auto"></video>
           
-            </div>
+            <!-- Las imágenes se inyectan acá desde JS -->
+        </div>
     </div>
     
     <footer>
@@ -27,6 +29,7 @@
         CDTT Carrefour © 2026<br/>
     </footer>
 
+    <!-- Botón discreto para ir al admin -->
     <a href="admin.html" style="position: absolute; bottom: 10px; right: 10px; color: rgba(255, 255, 255, 0.3); text-decoration: none; font-size: 16px; z-index: 1000; padding: 5px;" title="Ir al panel de control">⚙️</a>
 
     <script src="scripts.js"></script>
