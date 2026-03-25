@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - CDTT</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Librerías de Firebase (Solo usamos App y Database, chau Storage) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body class="admin-body">
+
+    <div id="login-screen">
+        <h2>Acceso Administrativo</h2>
+        <input type="text" id="username" placeholder="Usuario">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="verificarLogin()">Ingresar</button>
+        <p id="error-msg" style="color: red; display: none;">Credenciales incorrectas.</p>
+    </div>
+
+    <div id="admin-panel" style="display: none;">
+        <h2>Gestor de Ofertas (Máx. 20)</h2>
+        <p>Sube las imágenes desde tu PC. Al guardar, la TV se actualizará sola.</p>
+        
+        <div class="grid-ofertas" id="grid-container">
+            <!-- Slots generados por JS -->
+        </div>
+
+        <br>
+        <button class="save-btn" id="btn-guardar" onclick="guardarEnNube()">Subir Ofertas y Actualizar TV</button>
+        <p id="status-msg"></p>
+    </div>
+
+    <script>
+        // Tu configuración exacta de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6Kg7f_kB-lYKKZ6JAlKn6AaOs4VDXEZE",
+            authDomain: "carteleratt.firebaseapp.com",
+            projectId: "carteleratt",
+            storageBucket: "carteleratt.firebasestorage.app",
+            messagingSenderId: "761188410322",
+            appId: "1:761188410322:web:651747547fefb78812de0b",
+            measurementId: "G-JCPXHX5DYD"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const MAX_IMAGES = 20;
+        let imagenesCargadas = []; // Acá guardaremos los textos Base64
+
+        function verificarLogin() {
+            const user = document.getElementById("username").value;
+            const pass = document.getElementById("password").value;
+            
+            if (user === "admin" && pass === "cdtt957") {
+                document.getElementById("login-screen").style.display = "none";
+                document.getElementById("admin-panel").style.display = "block";
+                cargarDatosActuales();
+            } else {
+                document.getElementById("error-msg").style.display = "block";
+            }
+        }
+
+        function cargarDatosActuales() {
+            document.getElementById("status-msg").innerText = "Cargando ofertas actuales...";
+            database.ref('tv_data/images').once('value').then((snapshot) => {
+                imagenesCargadas = snapshot.val() || [];
+                // Rellenar array si tiene menos de 20
+                for (let i = 0; i < MAX_IMAGES; i++) {
+                    if (!imagenesCargadas[i]) imagenesCargadas[i] = null;
+                }
+                generarGrid();
+                document.getElementById("status-msg").innerText = "";
+            });
+        }
+
+        function generarGrid() {
+            const container = document.getElementById("grid-container");
+            container.innerHTML = ""; 
+
+            for (let i = 0; i < MAX_IMAGES; i++) {
+                const slot = document.createElement("div");
+                slot.className = "oferta-slot";
+                
+                const imgSrc = imagenesCargadas[i] || "https://via.placeholder.com/100?text=Vacio";
+                
+                slot.innerHTML = `
+                    <p>Posición ${i + 1}</p>
+                    <img id="preview-${i}" src="${imgSrc}" alt="Vista previa">
+                    <input type="file" accept="image/*" onchange="procesarImagen(event, ${i})">
+                    <button class="btn-borrar" onclick="borrarImagen(${i})">Eliminar</button>
+                `;
+                container.appendChild(slot);
+            }
+        }
+
+        function procesarImagen(event, index) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // Comprimir la imagen para que entre perfecto en la base de datos
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+                    
+                    const MAX_WIDTH = 1280;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convertir a texto (Base64 JPEG calidad 70%)
+                    const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+                    
+                    imagenesCargadas[index] = dataUrl;
+                    document.getElementById(`preview-${index}`).src = dataUrl;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function borrarImagen(index) {
+            imagenesCargadas[index] = null;
+            generarGrid();
+        }
+
+        async function guardarEnNube() {
+            const btn = document.getElementById("btn-guardar");
+            const status = document.getElementById("status-msg");
+            btn.disabled = true;
+            status.innerText = "Guardando cambios y actualizando TV...";
+
+            try {
+                // Filtrar los espacios vacíos para que el carrusel no se rompa
+                const limpias = imagenesCargadas.filter(img => img !== null && !img.includes("placeholder.com"));
+
+                // Guardar en Realtime Database
+                await database.ref('tv_data').set({
+                    timestamp: Date.now(),
+                    images: limpias
+                });
+
+                status.innerText = "¡Éxito! La TV ya está mostrando las nuevas ofertas.";
+                imagenesCargadas = limpias;
+                generarGrid();
+                
+            } catch (error) {
+                console.error("Error:", error);
+                status.innerText = "Hubo un error al guardar. Asegurate de que la base de datos esté creada y pública.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
